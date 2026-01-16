@@ -1,0 +1,200 @@
+<?php
+session_start();
+require_once "../config/database.php";
+
+/*
+ | PROTECT PAGE
+ | Only logged-in teachers allowed
+*/
+if (!isset($_SESSION["user_id"]) || $_SESSION["user_role"] !== "teacher") {
+    header("Location: ../index.php");
+    exit;
+}
+
+$message = "";
+$today = date("Y-m-d");
+
+/*
+ | HANDLE FORM SUBMISSION
+*/
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["attendance"])) {
+
+    foreach ($_POST["attendance"] as $student_id => $status) {
+
+        // Check if attendance already marked today
+        $check = $db->prepare("
+            SELECT id FROM attendance 
+            WHERE student_id = ? AND date = ?
+        ");
+        $check->execute([$student_id, $today]);
+
+        if (!$check->fetch()) {
+            $insert = $db->prepare("
+                INSERT INTO attendance (student_id, status, date, marked_by)
+                VALUES (?, ?, ?, ?)
+            ");
+            $insert->execute([
+                $student_id,
+                $status,
+                $today,
+                $_SESSION["user_id"]
+            ]);
+        }
+    }
+
+    $message = "Attendance marked successfully for today.";
+}
+
+// Fetch all students
+$students = $db->query("SELECT * FROM students ORDER BY student_name ASC")->fetchAll();
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Mark Attendance | Teacher</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: #f1f4f8;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: #fff;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .navbar a {
+            color: #fff;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .container {
+            padding: 30px;
+            max-width: 900px;
+            margin: auto;
+        }
+
+        .card {
+            background: #fff;
+            padding: 25px;
+            border-radius: 14px;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.08);
+        }
+
+        h3 {
+            margin-bottom: 15px;
+            color: #1e3c72;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: green;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        table th, table td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        table th {
+            background: #f8f9fc;
+        }
+
+        select {
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            margin-top: 20px;
+            background: #2a5298;
+            color: #fff;
+            border: none;
+            padding: 14px 30px;
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1e3c72;
+        }
+    </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="navbar">
+    <strong>Mark Attendance</strong>
+    <a href="dashboard.php">Dashboard</a>
+</div>
+
+<div class="container">
+    <div class="card">
+
+        <h3>Attendance for <?= $today ?></h3>
+
+        <?php if ($message): ?>
+            <div class="message"><?= htmlspecialchars($message) ?></div>
+        <?php endif; ?>
+
+        <form method="post">
+
+            <table>
+                <tr>
+                    <th>#</th>
+                    <th>Student Name</th>
+                    <th>Status</th>
+                </tr>
+
+                <?php foreach ($students as $index => $student): ?>
+                    <tr>
+                        <td><?= $index + 1 ?></td>
+                        <td><?= htmlspecialchars($student["student_name"]) ?></td>
+                        <td>
+                            <select name="attendance[<?= $student["id"] ?>]">
+                                <option value="Present">Present</option>
+                                <option value="Absent">Absent</option>
+                            </select>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </table>
+
+            <button type="submit">Save Attendance</button>
+
+        </form>
+
+    </div>
+</div>
+
+</body>
+</html>
